@@ -21,6 +21,8 @@ In this lab, we will explore the two paradigms of RL algorithms, namely, the pol
     5. **Deep Recurrent Q Network**[^3]: An implementation of Deep Recurrent Q-Network which can solve reinforcement learning problems involving partial observability.
 
 [^1]: This is the initial tentative plan. This might get updated/changed later on.
+
 [^2]: These will be given as programming assignment.
+
 [^3]: These are optional advanced reading/coding excercise.
 
