@@ -20,10 +20,10 @@ In this lab, we will explore the two paradigms of RL algorithms, namely, the pol
     4. **Q-Exploration**<sup>[2](#second)</sup>: An implementation of DQN containing multiple action-selection strategies for exploration.
     5. **Deep Recurrent Q Network**<sup>[3](#third)</sup>: An implementation of Deep Recurrent Q-Network which can solve reinforcement learning problems involving partial observability.
 
+---
+<x name="first">1</x>: This is the initial tentative plan. This might get updated/changed later on.
 
-<a name="first">1</a>: This is the initial tentative plan. This might get updated/changed later on.
+<y name="second">2</y>: These will be given as programming assignment.
 
-<b name="second">2</b>: These will be given as programming assignment.
-
-<c name="third">3</c>: These are optional advanced reading/coding excercise.
+<z name="third">3</z>: These are optional advanced reading/coding excercise.
 
