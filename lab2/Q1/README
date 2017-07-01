@@ -1,1 +1,8 @@
-To add two binary strings using RNNs
+Add two binary strings using RNNs
+=================================
+
+Author: Ankush Gupta
+Date: 29 June, 2017
+
+Test the effect of number of hidden units, cell type, number of RNN stacks
+(layers).
