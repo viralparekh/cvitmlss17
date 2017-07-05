@@ -1,4 +1,15 @@
 # coding: utf-8
+# =============================================================================
+#  Char-RNN in seq2seq manner  
+#  The seq2seq style this code follows is similar to the one in the Karpathy's original code
+# ============================================================================
+# for ML Summer School 2017 at IIIT - HYD
+# Authors -seq2seq lab mentors
+# Do not share this code or the associated exercises anywhere
+# we might be using the same code/ exercies for our future schools/ events
+# ==============================================================================
+
+
 from __future__ import print_function
 import numpy as np
 from time import sleep
@@ -11,7 +22,9 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 
-###### vectorize the text #####
+###################################################
+# Chunking and Vectorizing the text corpus
+##################################################
 
 text = open('tinyshakesepare.txt').read().lower()
 print('corpus length:', len(text))
@@ -65,24 +78,17 @@ print ('vectorization complete')
 featDim=len(chars)
 batchSize=20
 totalSequences=len(sentences)
-#X = autograd.Variable(torch.randn((11,maxlen, featDim)))
-#y=  autograd.Variable(torch.zeros((11,maxlen, featDim)))
-#print (X.type())
-#print(y.type())
-#y=y.long()
-
-#X = np.zeros((len(sentences), maxlen, len(chars)), dtype=np.uint8)
-#y = np.zeros((len(sentences),maxlen, len(chars)), dtype=np.uint8) # y is also a sequence , or  a seq of 1 hot vectors
 
 
 
 
 
-#########  Data is prepared now we must begin building the model ############
+############################################################
+#    MODEL DEFINITION 
+##########################################################
 
 
-#lstm to outputlayer > reshaping?
-#what if you have more than one lstm layer?
+# minesh -  TODO provision to have more layers ?
 
 class RNNnet (nn.Module):
         def __init__(self, inputDim, hiddenDim, outputDim,  numLayers, numDirections,batchSize):
@@ -99,19 +105,12 @@ class RNNnet (nn.Module):
 		self.softmax = nn.LogSoftmax()
 		self.hidden=self.init_hidden()
         def init_hidden(self):
-                #self.h_0=autograd.Variable(torch.randn(self.numLayers*self.numDirections, 1, self.hiddenDim))
-                #self.c_0=autograd.Variable(torch.randn(self.numLayers*self.numDirections, 1, self.hiddenDim))
 		return (autograd.Variable(torch.zeros(self.numLayers*self.numDirections, self.batchSize, self.hiddenDim)),
                 autograd.Variable(torch.zeros(self.numLayers*self.numDirections, self.batchSize, self.hiddenDim)))
 
         def forward(self, x ):
 		B,T,D  = x.size(0), x.size(1), x.size(2)
-		#print (B)
-		#print (T)
-		#print (D)
                 lstmOut, self.hidden=self.lstm(x, self.hidden ) #x has three dimensions batchSize* seqLen * FeatDim
-		#print ('lstmoutputsize is')
-		#print (lstmOut.size())
 		lstmOut = lstmOut.contiguous()
 		lstmOut = lstmOut.view(B*T, -1)
                 outputLayerActivations=self.outputLayer(lstmOut)
@@ -119,9 +118,13 @@ class RNNnet (nn.Module):
                 return outputSoftmax
 
 
+####################################################################
+# TRAINING
+###################################################################
 
 
-##### Training Code #########
+
+
 lstmSize=512
 numLstmLayers=1 #how many rnn/lstm layers of above size need to be stacked
 numDirections=1 # unidirectional =1 , biDirectional=2
@@ -131,7 +134,7 @@ model = RNNnet( featDim, lstmSize, featDim, numLstmLayers, numDirections,batchSi
 optimizer = optim.SGD(model.parameters(), lr=0.1)
 
 
-#how to give batches?
+# minesh - TODO - shuffle X before every iteration
 print ( 'training begins')
 ### epochs ##
 for epoch in range(1):
@@ -145,11 +148,7 @@ for epoch in range(1):
 		currentBatchTarget=autograd.Variable(torch.from_numpy(y[i:i+batchSize, :, :]).long())
 		finalScores = model(currentBatchInput)
 		finalScores=finalScores.view(batchSize,maxlen,featDim)
-		#print ('size of finalscores')
-		#print (finalScores.size())
 
-		#print ('size of target tensor')
-		#print (currentBatchTarget.size())
 
 		#lossfunctions we have in torch computes loss between two vectors ( cant handle sequences of such vectors)
 		#in our case we need to find the loss at each timestep then add up losses at each timestep to get the total loss for the sequence

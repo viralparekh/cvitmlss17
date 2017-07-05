@@ -1,12 +1,16 @@
 # coding: utf-8
-####################################################
+# =============================================================================
+# Make a simple RNN learn binray addition 
+# Binary string pairs and the sum is generated for a given #numBits
+# ============================================================================
 # for ML Summer School 2017 at IIIT - HYD
-# An RNN seq2seq model to add two binary strings
-# Author -minesh
+# Authors -seq2seq lab mentors
 # Do not share this code or the associated exercises anywhere
-# since we might want to reuse it for future schools/events
-#######################################################
-## !!!! The hidden layer size is set as 10, when its too less like 2 or too high like 200 it fails to converge
+# we might be using the same code/ exercies for our future schools/ events
+# ==============================================================================
+
+
+## minesh - !!!! The hidden layer size is set as 10, when its too less like 2 or too high like 200 it fails to converge
 
 from __future__ import print_function
 import numpy as np
@@ -19,7 +23,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-
+random.seed( 10 )
 
 def getSample(num1,num2):
 	#takes two int numbers 
@@ -98,55 +102,57 @@ class Adder (nn.Module):
 
 
 
-##### Training Code #########
-print ('start')
+############################################
+# TRAINING
+################################################
+
 
 featDim=2 # two bits each from each of the String
 outputDim=1 # one output node which would output a zero or 1
 
-lstmSize=10
+lstmSize=20
 
 lossFunction = nn.MSELoss()
 model =Adder(featDim, lstmSize, outputDim)
 print ('model initialized')
-optimizer = optim.SGD(model.parameters(), lr=3e-2, momentum=0.9)
+optimizer = optim.SGD(model.parameters(), lr=3e-2, momentum=0.8)
 
 
-print ( 'training begins')
 ### epochs ##
-loss= float("inf")
-while loss > 1e-3:
-	print(" Loss = %lf"%(loss))
-	loss=0
-	lowerBound=1
-	upperBound=4
+totalLoss= float("inf")
+while totalLoss > 1e-5:
+	print(" Loss = %lf"%(totalLoss))
+	totalLoss=0
+	for i in range(0,100):
+		lowerBound=3
+		upperBound=16
 
-	num1=random.randint(lowerBound,upperBound)
-	num2=random.randint(lowerBound,upperBound)
-	x,y=getSample(num1,num2)
+		num1=random.randint(lowerBound,upperBound)
+		num2=random.randint(lowerBound,upperBound)
+		x,y=getSample(num1,num2)
 
-	model.zero_grad()
-	model.hidden = model.init_hidden()
+		model.zero_grad()
+		model.hidden = model.init_hidden()
 
 
-	x_var=autograd.Variable(torch.from_numpy(x).unsqueeze(1).float()) #convert to torch tensor and variable
-	# unsqueeze() is used to add the extra dimension since
-	# your input need to be of t*batchsize*featDim; you cant do away with the batch in pytorch
-	seqLen=x_var.size(0)
+		x_var=autograd.Variable(torch.from_numpy(x).unsqueeze(1).float()) #convert to torch tensor and variable
+		# unsqueeze() is used to add the extra dimension since
+		# your input need to be of t*batchsize*featDim; you cant do away with the batch in pytorch
+		seqLen=x_var.size(0)
 	#print (x_var)
-	x_var= x_var.contiguous()
-	y_var=autograd.Variable(torch.from_numpy(y).float())
-	finalScores = model(x_var)
-	finalScores=finalScores.view(seqLen,outputDim)
+		x_var= x_var.contiguous()
+		y_var=autograd.Variable(torch.from_numpy(y).float())
+		finalScores = model(x_var)
+		finalScores=finalScores.view(seqLen,outputDim)
 
-	totalLoss=lossFunction(finalScores,y_var)	
-	loss+=totalLoss.data[0]
-	optimizer.zero_grad()
-	totalLoss.backward()
-	optimizer.step()
+		loss=lossFunction(finalScores,y_var)	
+		totalLoss+=loss.data[0]
+		optimizer.zero_grad()
+		loss.backward()
+		optimizer.step()
 		
 		
-	
+	totalLoss=totalLoss/100
 	
 
 
