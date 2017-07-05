@@ -119,7 +119,7 @@ class rnnocr (nn.Module):
 		self.numDirections=numDirections
 		self.batchSize=batchSize
 
-		self.blstm1=nn.LSTM(inputDim, hiddenDim, bidirectonal=True, batch_first=True) # first blstm layer takes the image features as inputs
+		self.blstm1=nn.LSTM(inputDim, hiddenDim, bidirectional=True, batch_first=True) # first blstm layer takes the image features as inputs
 		self.blstm2=nn.LSTM(hiddenDim, hiddenDim, bidirectional=True, batch_first=True) # here input is output of linear layer 1 
 		
 		self.linearLayer1=nn.Linear(hiddenDim*2, hiddenDim) # the embedding layer between the two blstm layers
@@ -127,14 +127,15 @@ class rnnocr (nn.Module):
 		
 		self.softmax = nn.LogSoftmax()
 		
-		self.hidden1=self.init_hidden()
-		self.hidden2=self.init_hidden() 
+		#self.hidden1=self.init_hidden()
+		#self.hidden2=self.init_hidden() 
 	def init_hidden(self):
 		return (autograd.Variable(torch.zeros(self.numLayers*self.numDirections, self.batchSize, self.hiddenDim)),
                 autograd.Variable(torch.zeros(self.numLayers*self.numDirections, self.batchSize, self.hiddenDim)))
 	def forward(self, x ):
 		B,T,D  = x.size(0), x.size(1), x.size(2)
-		lstmOut1, self.hidden1=self.blstm1(x, self.hidden1 ) #x has three dimensions batchSize* seqLen * FeatDim
+		#lstmOut1, self.hidden1=self.blstm1(x, self.hidden1 ) #x has three dimensions batchSize* seqLen * FeatDim
+		lstmOut1, _  =self.blstm1(x ) #x has three dimensions batchSize* seqLen * FeatDim
 		B,T,D  = lstmOut1.size(0), lstmOut1.size(1), lstmOut1.size(2)
 		lstmOut1=lstmOut1.contiguous()
 		embedding=self.linearLayer1(lstmOut1.view(B*T,D))
@@ -142,11 +143,13 @@ class rnnocr (nn.Module):
 		input2blstm2=embedding.view(B,T,-1)
 		
 
-		lstmOut2, self.hidden2=self.blstm2(input2blstm2)
+		#lstmOut2, self.hidden2=self.blstm2(input2blstm2)
+		lstmOut2, _ = self.blstm2(input2blstm2)
 		B,T,D  = lstmOut2.size(0), lstmOut2.size(1), lstmOut2.size(2)
-		outputLayerActivations=self.outputLayer(lstmOut2.view(B*T,D))
+		lstmOut2=lstmOut2.contiguous()
+		outputLayerActivations=self.linearLayer2(lstmOut2.view(B*T,D))
 		#outputSoftmax=F.log_softmax(outputLayerActivations)
-		return outputLayerActivations(B*T,-1)
+		return outputLayerActivations.view(B,T,-1).transpose(0,1) # transpose since ctc expects the probabilites to be in t x b x nclasses format
 
 
 
@@ -171,19 +174,28 @@ optimizer = optim.Adam(model.parameters(), lr=0.01,
 
 
 
+
+
 random.shuffle(words)
-for i in range (0,25-batchSize+1,batchSize):
+for i in range (0,vocabSize-batchSize+1,batchSize):
 	model.zero_grad()
+	model.hidden = model.init_hidden()
 	batchOfWords=words[i:i+batchSize]
-	print (len(batchOfWords))
+	#print (len(batchOfWords))
 	images,labelSeqs,labelSeqlens =GetBatch(batchOfWords)
 	images=autograd.Variable(images)
+	images=images.contiguous()
 	labelSeqs=autograd.Variable(labelSeqs)
 	labelSeqlens=autograd.Variable(labelSeqlens)
 	outputs=model(images)
-	outputsSize=Variable(torch.IntTensor([outputs.size(0)] * batchSize))
+	#print (outputs.size())
+	outputs=outputs.contiguous()
+	outputsSize=autograd.Variable(torch.IntTensor([outputs.size(0)] * batchSize))
 	cost = criterion(outputs, labelSeqs, outputsSize, labelSeqlens) / batchSize
-	
+	print (cost)
+	optimizer.zero_grad()
+	cost.backward()
+	optimizer.step()
 	
 
 
