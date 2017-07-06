@@ -4,7 +4,7 @@ http://cvit.iiit.ac.in/mlsummerschool2017/
 ## Lab 4: Deep Reinforcement Learning
 Reinforcement learning provides the capacity for us not only to teach an artificial agent how to act, but to allow it to learn through it's own interaction with the environment. By combining the complex representations that deep neural networks can learn with the goal-driven learning of an RL agent, computers have accompolished some amazing feats, like beating humans in [dozen Atari games](https://deepmind.com/research/dqn/), and [defeating the Go world champion](https://deepmind.com/research/alphago/).
 
-In this lab, we will explore the two paradigms of RL algorithms, namely, the policy-based algorithms and the Q-Learning algorithms. The detailed plan <sup>[1](#first)</sup> is as follows:
+In this lab, we will explore the two paradigms of RL algorithms, namely, the policy-based algorithms and the Q-Learning algorithms. The detailed plan<sup>[1](#first)</sup> is as follows:
 
 + **_Policy Based Methods_**
     1. **Simple Policy**: An implementation of policy gradient method for stateless environments such as n-armed bandit problem. 
