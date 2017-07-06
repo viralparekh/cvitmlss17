@@ -21,8 +21,25 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torchvision.transforms as transforms
 from warpctc_pytorch import CTCLoss
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+
 random.seed(0)
 
+#all word images are resized to a height of 32 pixels
+imHeight=32 
+"""
+image width is also set a fixed size
+YES. Though RNNS can handle variable length sequences we resize them to fixed width
+This is for the ease of batch learning
+And it doesnt seem to affect the performance much atleast in our case
+
+Pytorch provides a packed array API incase you want to have variable length sequences within a batch
+see the discussion here
+https://discuss.pytorch.org/t/simple-working-example-how-to-use-packing-for-variable-length-sequence-inputs-for-rnn/2120/8
+
+"""
+imWidth=100
 fontsList=glob.glob('/OCRData/minesh.mathew/Englishfonts/English_fonts/googleFonts/'+'*.ttf')
 vocabFile=codecs.open('/OCRData2/minesh.mathew/oxford_dataset/sct/mnt/ramdisk/max/90kDICT32px/lexicon.txt','r')
 words = vocabFile.read().split()
@@ -35,13 +52,34 @@ for i, char in enumerate(alphabet):
 	dict[char] = i + 1
 
 
-def StrtoLabels(text):
+
+
+def Str2Labels(text):
 	global dict
 	text = [dict[char.lower()] for char in text]
 	#print (text)
 	length=len(text)
 	return text, length
 #StrtoLabels("0-1")
+
+def Labels2Str(predictedLabelSequences):
+	bz=predictedLabelSequences.size(0)
+	predictedRawStrings=[]
+	predictedStrings=[]
+	for i in range(0,bz):
+		predictedRawString=""
+		predictedLabelSeq=predictedLabelSequences.data[i,:]
+		for j in range (0, predictedLabelSeq.size(0)):
+			idx=predictedLabelSeq[j]
+			if idx==0:
+				character="~"
+			else:
+				character=alphabet[idx-1]
+
+				
+			predictedRawString+=character
+		predictedRawStrings.append(predictedRawString)
+	return predictedRawStrings
 
 
 def image2tensor(im):
@@ -83,13 +121,24 @@ def GetBatch ( batchOfWords ):
 		img=Image.new("L", textSize,(255))
 		draw = ImageDraw.Draw(img)
 		draw.text((0, 0),wordText,(0),font=imageFont)
-		img=img.resize((100,32), Image.ANTIALIAS)
-		imgTensor=image2tensor(img).unsqueeze(0) # at 0 a new dimension is added
+		img=img.resize((imWidth,imHeight), Image.ANTIALIAS)
+		#img.save(text+'.jpeg')
+
+		imgTensor=image2tensor(img)
+		#imgplot=plt.imshow(imgTensor.numpy())
+		#plt.savefig(text+'_saveplot.jpeg')
+		imgTensor=imgTensor.unsqueeze(0) # at 0 a new dimenion is added
+		#imgFromTensor=Image.fromarray(imgTensor.numpy())
+
+		#imgFromTensor.save(text+'_fromTensor.jpeg')
+		#if i==0:
+		#	print (imgTensor)
 		#print (imgTensor.size())
 		#print (imgArray.shape)
+		#imgplot=plt.imshow(imgTensor.numpy())
 		wordImages.append(imgTensor)
 
-		labelSeq,l=StrtoLabels(wordText)
+		labelSeq,l=Str2Labels(wordText)
 		labelSequences+=labelSeq
 		labelSeqLengths.append(l)
 	batchImageTensor=torch.cat(wordImages,0) #now all the image tensors are combined ( we  did the unsqueeze eariler for this cat)	
@@ -110,14 +159,13 @@ def GetBatch ( batchOfWords ):
 # minesh TODO split blstm into a separate class ?
 
 class rnnocr (nn.Module):
-	def __init__(self, inputDim, hiddenDim, outputDim,  numLayers, numDirections,batchSize):
+	def __init__(self, inputDim, hiddenDim, outputDim,  numLayers, numDirections):
 		super(rnnocr, self).__init__()
 		self.inputDim=inputDim
 		self.hiddenDim=hiddenDim
 		self.outputDim=outputDim
 		self.numLayers=numLayers
 		self.numDirections=numDirections
-		self.batchSize=batchSize
 
 		self.blstm1=nn.LSTM(inputDim, hiddenDim, bidirectional=True, batch_first=True) # first blstm layer takes the image features as inputs
 		self.blstm2=nn.LSTM(hiddenDim, hiddenDim, bidirectional=True, batch_first=True) # here input is output of linear layer 1 
@@ -125,16 +173,9 @@ class rnnocr (nn.Module):
 		self.linearLayer1=nn.Linear(hiddenDim*2, hiddenDim) # the embedding layer between the two blstm layers
 		self.linearLayer2=nn.Linear(hiddenDim*2, outputDim) # linear layer at the output
 		
-		self.softmax = nn.LogSoftmax()
 		
-		#self.hidden1=self.init_hidden()
-		#self.hidden2=self.init_hidden() 
-	def init_hidden(self):
-		return (autograd.Variable(torch.zeros(self.numLayers*self.numDirections, self.batchSize, self.hiddenDim)),
-                autograd.Variable(torch.zeros(self.numLayers*self.numDirections, self.batchSize, self.hiddenDim)))
 	def forward(self, x ):
 		B,T,D  = x.size(0), x.size(1), x.size(2)
-		#lstmOut1, self.hidden1=self.blstm1(x, self.hidden1 ) #x has three dimensions batchSize* seqLen * FeatDim
 		lstmOut1, _  =self.blstm1(x ) #x has three dimensions batchSize* seqLen * FeatDim
 		B,T,D  = lstmOut1.size(0), lstmOut1.size(1), lstmOut1.size(2)
 		lstmOut1=lstmOut1.contiguous()
@@ -143,15 +184,24 @@ class rnnocr (nn.Module):
 		input2blstm2=embedding.view(B,T,-1)
 		
 
-		#lstmOut2, self.hidden2=self.blstm2(input2blstm2)
 		lstmOut2, _ = self.blstm2(input2blstm2)
 		B,T,D  = lstmOut2.size(0), lstmOut2.size(1), lstmOut2.size(2)
 		lstmOut2=lstmOut2.contiguous()
 		outputLayerActivations=self.linearLayer2(lstmOut2.view(B*T,D))
-		#outputSoftmax=F.log_softmax(outputLayerActivations)
 		return outputLayerActivations.view(B,T,-1).transpose(0,1) # transpose since ctc expects the probabilites to be in t x b x nclasses format
 
 
+
+###########
+# Prepare the synthetic validation data
+##############
+
+valWords=['cvit','summer','school','vision','machine','hyderabad', 'telengana', 'andhra']
+valImages, valLabelSeqs, valLabelSeqlens=GetBatch(valWords)
+valImages=autograd.Variable(valImages)
+valImages=valImages.contiguous()
+valLabelSeqs=autograd.Variable(valLabelSeqs)
+valLabelSeqlens=autograd.Variable(valLabelSeqlens)
 
 
 
@@ -166,35 +216,60 @@ then the word list is shuffled and above process is repeated
 """
 
 nClasses= len(alphabet)
-model = rnnocr(32,100,nClasses,1,2,batchSize)
 criterion = CTCLoss()
+
+numLayers=1 # the 2 BLSTM layers defined seprately without using numLayers option for nn.LSTM
+numDirections=2 # 2 since we need to use a bidirectional LSTM
+model = rnnocr(imHeight,imWidth,nClasses,numLayers,numDirections)
+
 #nClasses= len(alphabet)
-optimizer = optim.Adam(model.parameters(), lr=0.01,
-                           betas=(0.5, 0.999))
+#optimizer = optim.Adam(model.parameters(), lr=0.01,
+#                           betas=(0.5, 0.999))
+optimizer=optim.RMSprop(model.parameters(), lr=0.01)
 
 
 
 
-
+avgTrainCost=0
 random.shuffle(words)
 for i in range (0,vocabSize-batchSize+1,batchSize):
+	
 	model.zero_grad()
-	model.hidden = model.init_hidden()
+	#model.hidden = model.init_hidden()
 	batchOfWords=words[i:i+batchSize]
-	#print (len(batchOfWords))
 	images,labelSeqs,labelSeqlens =GetBatch(batchOfWords)
 	images=autograd.Variable(images)
 	images=images.contiguous()
 	labelSeqs=autograd.Variable(labelSeqs)
 	labelSeqlens=autograd.Variable(labelSeqlens)
 	outputs=model(images)
-	#print (outputs.size())
 	outputs=outputs.contiguous()
 	outputsSize=autograd.Variable(torch.IntTensor([outputs.size(0)] * batchSize))
-	cost = criterion(outputs, labelSeqs, outputsSize, labelSeqlens) / batchSize
-	print ('cost is',cost)
+	trainCost = criterion(outputs, labelSeqs, outputsSize, labelSeqlens) / batchSize
+	avgTrainCost+=trainCost
+	if i%5000==0:
+		avgTrainCost=avgTrainCost/(i/batchSize)
+		print ('avgTraincost for last 5000 samples is',avgTrainCost)
+		avgTrainCost=0
+		valOutputs=model(valImages)
+		#print (valOutputs.size()) 100 X nvalsamoles x 37
+		valOutputs=valOutputs.contiguous()
+		valOutputsSize=autograd.Variable(torch.IntTensor([valOutputs.size(0)] * len(valWords)))
+		valCost=criterion(valOutputs, valLabelSeqs, valOutputsSize, valLabelSeqlens) / len(valWords)
+		print ('validaton Cost is',valCost)
+
+
+		### get the actual predictions and compute word error ################
+		valOutputs_batchFirst=valOutputs.transpose(0,1)
+		# second output of max() is the argmax along the requuired dimension
+		_, argMaxActivations= valOutputs_batchFirst.max(2)
+		#the below tensor each raw is the sequences of labels predicted for each sample in the batch
+		predictedSeqLabels=argMaxActivations.squeeze(2) #batchSize * seqLen 
+		predictedStrings=Labels2Str(predictedSeqLabels)
+		print (predictedStrings[0])
+		
 	optimizer.zero_grad()
-	cost.backward()
+	trainCost.backward()
 	optimizer.step()
 	
 
