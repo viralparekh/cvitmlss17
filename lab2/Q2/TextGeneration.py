@@ -48,8 +48,8 @@ step = 1
 sentences = []
 next_chars = []
 for i in range(0, len(text) - maxlen+1, step):
-    sentences.append(text[i: i + maxlen]) #input is from i to maxlen
-    next_chars.append(text[i+1:i +1+ maxlen]) # output is i+1 to i+1+maxlen
+	sentences.append(text[i: i + maxlen]) #input is from i to maxlen
+	next_chars.append(text[i+1:i +1+ maxlen]) # output is i+1 to i+1+maxlen
 print('no of  sequences:', len(sentences))
 
 print('Vectorization...')
@@ -62,12 +62,12 @@ X = np.zeros((len(sentences), maxlen, len(chars)), dtype=np.float)
 y = np.zeros((len(sentences),maxlen, len(chars)), dtype=np.float) # y is also a sequence , or  a seq of 1 hot vectors
 
 for i, sentence in enumerate(sentences):
-    for t, char in enumerate(sentence):
-        X[i, t, char_indices[char]] = 1.0 
+	for t, char in enumerate(sentence):
+		X[i, t, char_indices[char]] = 1.0 
 
 for i, sentence in enumerate(next_chars):
-    for t, char in enumerate(sentence):
-        y[i, t, char_indices[char]] = 1 
+	for t, char in enumerate(sentence):
+		y[i, t, char_indices[char]] = 1 
 
 
 print ('vectorization complete')
@@ -91,31 +91,25 @@ totalSequences=len(sentences)
 # minesh -  TODO provision to have more layers ?
 
 class RNNnet (nn.Module):
-        def __init__(self, inputDim, hiddenDim, outputDim,  numLayers, numDirections,batchSize):
-                super(RNNnet, self).__init__()
-                self.inputDim=inputDim
-                self.hiddenDim=hiddenDim
-                self.outputDim=outputDim
-                self.numLayers=numLayers
-                self.numDirections=numDirections
+	def __init__(self, inputDim, hiddenDim, outputDim,  numLayers, numDirections,batchSize):
+		super(RNNnet, self).__init__()
+		self.inputDim=inputDim
+		self.hiddenDim=hiddenDim
+		self.outputDim=outputDim
+		self.numLayers=numLayers
+		self.numDirections=numDirections
 		self.batchSize=batchSize
-
-                self.lstm=nn.LSTM(inputDim, hiddenDim, batch_first=True)
-                self.outputLayer=nn.Linear(hiddenDim, outputDim)
+		self.lstm=nn.LSTM(inputDim, hiddenDim, batch_first=True)
+		self.outputLayer=nn.Linear(hiddenDim, outputDim)
 		self.softmax = nn.LogSoftmax()
-		self.hidden=self.init_hidden()
-        def init_hidden(self):
-		return (autograd.Variable(torch.zeros(self.numLayers*self.numDirections, self.batchSize, self.hiddenDim)),
-                autograd.Variable(torch.zeros(self.numLayers*self.numDirections, self.batchSize, self.hiddenDim)))
-
-        def forward(self, x ):
+	def forward(self, x ):
 		B,T,D  = x.size(0), x.size(1), x.size(2)
-                lstmOut, self.hidden=self.lstm(x, self.hidden ) #x has three dimensions batchSize* seqLen * FeatDim
+		lstmOut,_ =self.lstm(x ) #x has three dimensions batchSize* seqLen * FeatDim
 		lstmOut = lstmOut.contiguous()
 		lstmOut = lstmOut.view(B*T, -1)
-                outputLayerActivations=self.outputLayer(lstmOut)
+		outputLayerActivations=self.outputLayer(lstmOut)
 		outputSoftmax=F.log_softmax(outputLayerActivations)
-                return outputSoftmax
+		return outputSoftmax
 
 
 ####################################################################
@@ -140,7 +134,6 @@ print ( 'training begins')
 for epoch in range(1):
 	for i in range(0, totalSequences - maxlen+1, batchSize):# take chunks of size=batchSize in sequential order from X 
 		model.zero_grad()
-		model.hidden = model.init_hidden()
 	
 		currentBatchInput=autograd.Variable(torch.from_numpy(X[i:i+batchSize, :, :]).float()) #convert to torch tensor and variable
 		currentBatchInput = currentBatchInput.contiguous()

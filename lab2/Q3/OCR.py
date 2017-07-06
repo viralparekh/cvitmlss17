@@ -96,7 +96,7 @@ def GetBatch ( batchOfWords ):
 	batchImageTensor=torch.transpose(batchImageTensor,1,2)
 	labelSequencesTensor=torch.IntTensor(labelSequences)
 	labelSeqLengthsTensor=torch.IntTensor(labelSeqLengths)
-	print(batchImageTensor.size())
+	#print(batchImageTensor.size())
 	#print (labelSequencesTensor)
 	return batchImageTensor, labelSequencesTensor, labelSeqLengthsTensor
 		
@@ -192,7 +192,7 @@ for i in range (0,vocabSize-batchSize+1,batchSize):
 	outputs=outputs.contiguous()
 	outputsSize=autograd.Variable(torch.IntTensor([outputs.size(0)] * batchSize))
 	cost = criterion(outputs, labelSeqs, outputsSize, labelSeqlens) / batchSize
-	print (cost)
+	print ('cost is',cost)
 	optimizer.zero_grad()
 	cost.backward()
 	optimizer.step()

@@ -84,15 +84,11 @@ class Adder (nn.Module):
                 self.lstm=nn.LSTM(inputDim, hiddenDim )
                 self.outputLayer=nn.Linear(hiddenDim, outputDim)
 		self.sigmoid=nn.Sigmoid()
-		self.hidden=self.init_hidden()
-        def init_hidden(self):
-		return (autograd.Variable(torch.zeros(1, 1, self.hiddenDim)),
-                autograd.Variable(torch.zeros(1, 1, self.hiddenDim)))
 
         def forward(self, x ):
 		T,D  = x.size(0), x.size(1)
 		#batch is a must 
-                lstmOut, self.hidden=self.lstm(x, self.hidden ) #x has two  dimensions  seqLen *batch* FeatDim=2
+                lstmOut,_ =self.lstm(x ) #x has two  dimensions  seqLen *batch* FeatDim=2
 		lstmOut = lstmOut.contiguous() #
 		lstmOut = lstmOut.view(T, -1)
                 outputLayerActivations=self.outputLayer(lstmOut)
@@ -132,7 +128,6 @@ while totalLoss > 1e-5:
 		x,y=getSample(num1,num2)
 
 		model.zero_grad()
-		model.hidden = model.init_hidden()
 
 
 		x_var=autograd.Variable(torch.from_numpy(x).unsqueeze(1).float()) #convert to torch tensor and variable
