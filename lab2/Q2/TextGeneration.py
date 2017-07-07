@@ -21,7 +21,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-
+use_cuda = torch.cuda.is_available()
 ###################################################
 # Chunking and Vectorizing the text corpus
 ##################################################
@@ -31,10 +31,12 @@ print('corpus length:', len(text))
 
 
 chars = sorted(list(set(text)))
-print('total chars:', len(chars))
+#print(chars)
+#print('total chars:', len(chars))
 char_indices = dict((c, i) for i, c in enumerate(chars))
 indices_char = dict((i, c) for i, c in enumerate(chars))
 
+#print('char is',indices_char[10])
 
 
 # split the corpus into sequences of length=maxlen
@@ -60,14 +62,15 @@ print('Vectorization...')
 
 X = np.zeros((len(sentences), maxlen, len(chars)), dtype=np.float)
 y = np.zeros((len(sentences),maxlen, len(chars)), dtype=np.float) # y is also a sequence , or  a seq of 1 hot vectors
-
+#y= np.zeros((len(sentences),maxlen, 1), dtype=np.uint8)
 for i, sentence in enumerate(sentences):
 	for t, char in enumerate(sentence):
 		X[i, t, char_indices[char]] = 1.0 
 
 for i, sentence in enumerate(next_chars):
 	for t, char in enumerate(sentence):
-		y[i, t, char_indices[char]] = 1 
+		y[i, t, char_indices[char]] = 1.0 
+		#y[i, t,0] = 1
 
 
 print ('vectorization complete')
@@ -76,7 +79,7 @@ print ('vectorization complete')
 
 
 featDim=len(chars)
-batchSize=20
+batchSize=50
 totalSequences=len(sentences)
 
 
@@ -101,16 +104,28 @@ class RNNnet (nn.Module):
 		self.batchSize=batchSize
 		self.lstm=nn.LSTM(inputDim, hiddenDim, batch_first=True)
 		self.outputLayer=nn.Linear(hiddenDim, outputDim)
-		self.softmax = nn.LogSoftmax()
+		self.softmax = nn.Softmax()
+		
+	#	self.hidden=self.init_hidden()	
+	#def init_hidden(self):
+	#	 return (autograd.Variable(torch.zeros(self.numLayers*self.numDirections, self.batchSize, self.hiddenDim)),
+    #             autograd.Variable(torch.zeros(self.numLayers*self.numDirections, self.batchSize, self.hiddenDim)))
+ 	
+
+	
 	def forward(self, x ):
 		B,T,D  = x.size(0), x.size(1), x.size(2)
 		lstmOut,_ =self.lstm(x ) #x has three dimensions batchSize* seqLen * FeatDim
 		lstmOut = lstmOut.contiguous()
 		lstmOut = lstmOut.view(B*T, -1)
 		outputLayerActivations=self.outputLayer(lstmOut)
-		outputSoftmax=F.log_softmax(outputLayerActivations)
+		outputSoftmax=self.softmax(outputLayerActivations)
+		if use_cuda:
+			outputSoftmax=outputSoftmax.cuda()
 		return outputSoftmax
-
+		#if use_cuda:
+		#	outputLayerActivations=outputLayerActivations.cuda()
+		#return outputLayerActivations
 
 ####################################################################
 # TRAINING
@@ -123,25 +138,37 @@ lstmSize=512
 numLstmLayers=1 #how many rnn/lstm layers of above size need to be stacked
 numDirections=1 # unidirectional =1 , biDirectional=2
 
-lossFunction = nn.NLLLoss()
+lossFunction = nn.MSELoss()
 model = RNNnet( featDim, lstmSize, featDim, numLstmLayers, numDirections,batchSize)
-optimizer = optim.SGD(model.parameters(), lr=0.1)
+if use_cuda:
+	model=model.cuda()
+optimizer = optim.RMSprop(model.parameters(), lr=0.01)
 
+
+seed_string="you are"
 
 # minesh - TODO - shuffle X before every iteration
 print ( 'training begins')
 ### epochs ##
 for epoch in range(1):
+	step=0
 	for i in range(0, totalSequences - maxlen+1, batchSize):# take chunks of size=batchSize in sequential order from X 
+		step=step+1
 		model.zero_grad()
-	
+		#model.hidden = model.init_hidden()
 		currentBatchInput=autograd.Variable(torch.from_numpy(X[i:i+batchSize, :, :]).float()) #convert to torch tensor and variable
+		if use_cuda:
+			currentBatchInput=currentBatchInput.cuda()
 		currentBatchInput = currentBatchInput.contiguous()
 		#print(currentBatchInput.size())
-		currentBatchTarget=autograd.Variable(torch.from_numpy(y[i:i+batchSize, :, :]).long())
+		currentBatchTarget=autograd.Variable(torch.from_numpy(y[i:i+batchSize, :, :]).float())
+		if use_cuda:
+			currentBatchTarget=currentBatchTarget.cuda()
+
 		finalScores = model(currentBatchInput)
 		finalScores=finalScores.view(batchSize,maxlen,featDim)
-
+		#_, argMaxAtAllTimesteps=finalScores.max(2)
+		#print('argmax is', argMaxAtAllTimesteps[0,10,:])
 
 		#lossfunctions we have in torch computes loss between two vectors ( cant handle sequences of such vectors)
 		#in our case we need to find the loss at each timestep then add up losses at each timestep to get the total loss for the sequence
@@ -154,17 +181,56 @@ for epoch in range(1):
 				if totalLoss is None:
 					#print (finalScores[i,j,:])
 					#print (currentBatchTarget[i,j,:])
+					#print('size of activation vector is', finalScores[i,j,:].size())
+					#totalLoss = lossFunction(finalScores[i,j,:],currentBatchTarget[i,j,:])
+					#print ('outputs and targets are')
+					#print (finalScores[i,j,:])
+					#print(currentBatchTarget[i,j,:])
 					totalLoss = lossFunction(finalScores[i,j,:],currentBatchTarget[i,j,:])
-
 				else:
 					totalLoss += lossFunction(finalScores[i,j,:],currentBatchTarget[i,j,:])
 
 		
 			
 		totalLoss=totalLoss/(maxlen*batchSize)
-		print ('loss is')
-		print (totalLoss)
+		#print ('loss is')
+		#print (totalLoss)
 		
+		if step%2==0:
+			
+			seed_string="you are"
+			
+			print ("seed string -->", seed_string)
+			print ('The generated text is')
+			sys.stdout.write(seed_string),
+			
+			for k in range(0,40):
+				x=np.zeros((1, len(seed_string), len(chars)))
+				x=autograd.Variable(torch.from_numpy(x).float())
+				for t, char in enumerate(seed_string):
+					x.data[0, t, char_indices[char]] = 1.
+					#print ('type of x', type(x))
+					#x=autograd.Variable(torch.from_numpy(x).float())
+				scores = model(x)
+				#print(scores.size())
+				_, argMaxAtAllTimesteps=scores.max(1)
+				#print (argMaxAtAllTimesteps.size())
+				next_index=argMaxAtAllTimesteps.data[len(seed_string)-1,0]
+				#print ('NEXT INDEX IS',next_index)
+				#print(scores[0,:])
+				#firstIndex=argMaxAtAllTimesteps.data[0,0]
+				#firstChar=indices_char[firstIndex]
+				#print('######################################first char is',firstChar)
+
+				next_char = indices_char[next_index]
+
+				seed_string = seed_string + next_char
+				sys.stdout.write(next_char)
+			sys.stdout.flush()
+
+		
+
+		optimizer.zero_grad()
 		totalLoss.backward()
 		optimizer.step()
 		

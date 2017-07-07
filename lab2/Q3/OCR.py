@@ -19,7 +19,7 @@ import torch.autograd as autograd
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import torchvision.transforms as transforms
+#import torchvision.transforms as transforms
 from warpctc_pytorch import CTCLoss
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
@@ -277,6 +277,7 @@ for iter in range (0,4):
 			valOutputs_batchFirst=valOutputs.transpose(0,1)
 			# second output of max() is the argmax along the requuired dimension
 			_, argMaxActivations= valOutputs_batchFirst.max(2)
+			print (argMaxActivations.size())
 			#the below tensor each raw is the sequences of labels predicted for each sample in the batch
 			predictedSeqLabels=argMaxActivations.squeeze(2) #batchSize * seqLen 
 			predictedStrings=Labels2Str(predictedSeqLabels)
