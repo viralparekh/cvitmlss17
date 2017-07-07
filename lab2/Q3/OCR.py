@@ -23,7 +23,7 @@ import torchvision.transforms as transforms
 from warpctc_pytorch import CTCLoss
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
-
+import cv2
 random.seed(0)
 
 #all word images are resized to a height of 32 pixels
@@ -82,18 +82,22 @@ def Labels2Str(predictedLabelSequences):
 	return predictedRawStrings
 
 
+
 def image2tensor(im):
 
-    """
-	input - a PIL Image
-	output - a torch tensor of the shape  H*W
-	ref : https://stackoverflow.com/questions/13550376/pil-image-to-array-numpy-array-to-array-python
-    """
     (width, height) = im.size
     greyscale_map = list(im.getdata())
-    greyscale_map = np.array(greyscale_map)
-    greyscale_map = torch.from_numpy(greyscale_map.reshape((height, width))).float()/255.0
+    greyscale_map = np.array(greyscale_map, dtype = np.uint8)
+    #greyscale_map=greyscale_map.astype(float)
+    greyscale_map_bin, th =cv2.threshold(greyscale_map,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+    greyscale_map_bin=greyscale_map.astype(float)
+    #print (greyscale_map_bin)
+    greyscale_map = torch.from_numpy(greyscale_map_bin.reshape((height, width))).float()/255.0
     return greyscale_map
+
+
+
+
 
 
 
@@ -285,6 +289,8 @@ for iter in range (0,4):
 		optimizer.zero_grad()
 		trainCost.backward()
 		optimizer.step()
+	iterString=int(iter)
+	torch.save(model.state_dict(), iterString+'.pth')
 	
 
 
