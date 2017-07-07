@@ -23,7 +23,7 @@ import torchvision.transforms as transforms
 from warpctc_pytorch import CTCLoss
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
-
+import cv2
 random.seed(0)
 
 #all word images are resized to a height of 32 pixels
@@ -84,16 +84,15 @@ def Labels2Str(predictedLabelSequences):
 
 def image2tensor(im):
 
-    """
-	input - a PIL Image
-	output - a torch tensor of the shape  H*W
-	ref : https://stackoverflow.com/questions/13550376/pil-image-to-array-numpy-array-to-array-python
-    """
-    (width, height) = im.size
-    greyscale_map = list(im.getdata())
-    greyscale_map = np.array(greyscale_map)
-    greyscale_map = torch.from_numpy(greyscale_map.reshape((height, width))).float()/255.0
-    return greyscale_map
+	(width, height) = im.size
+	greyscale_map = list(im.getdata())
+	greyscale_map = np.array(greyscale_map, dtype = np.uint8)
+	#greyscale_map=greyscale_map.astype(float)
+	greyscale_map_bin, th =cv2.threshold(greyscale_map,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+	greyscale_map_bin=greyscale_map.astype(float)
+	#print (greyscale_map_bin)
+	greyscale_map = torch.from_numpy(greyscale_map_bin.reshape((height, width))).float()/255.0
+	return greyscale_map
 
 
 
@@ -118,7 +117,7 @@ def GetBatch ( batchOfWords ):
 		fontSize='26'
 		#fontSize=fontSizeOptions[0]
 		#fontName=random.sample(fontsList,1)[0]
-		#fontSize=random.sample(fontSizeOptions,1)[0]
+		fontSize=random.sample(fontSizeOptions,1)[0]
 		imageFont = ImageFont.truetype(fontName,int(fontSize))
 		textSize=imageFont.getsize(wordText)
 		img=Image.new("L", textSize,(255))
@@ -203,7 +202,7 @@ class rnnocr (nn.Module):
 
 valWords=['cvit','summer','school','vision','machine','hyderabad', 'telengana', 'andhra']
 #valWords=['2vit','2vit','2vit','2vit','2vit','2vit','2vit','2vit','2vit','2vit']
-#valWords=['0202','0202','0202','0202','0202','0202','0202','0202','0202','0202']
+valWords=['2222','2222','2222','2222','2222','2222','2222','2222','2222','2222']
 valImages, valLabelSeqs, valLabelSeqlens=GetBatch(valWords)
 valImages=autograd.Variable(valImages)
 valImages=valImages.contiguous()
@@ -222,13 +221,13 @@ a batch of words are sequentially fetched from the vocabulary
 one epoch runs until all the words in the vocabulary are seen once
 then the word list is shuffled and above process is repeated
 """
-nHidden=250
+
 nClasses= len(alphabet)
 criterion = CTCLoss()
 
 numLayers=1 # the 2 BLSTM layers defined seprately without using numLayers option for nn.LSTM
 numDirections=2 # 2 since we need to use a bidirectional LSTM
-model = rnnocr(imHeight,nHidden,nClasses,numLayers,numDirections)
+model = rnnocr(imHeight,imWidth,nClasses,numLayers,numDirections)
 
 #nClasses= len(alphabet)
 #optimizer = optim.Adam(model.parameters(), lr=0.01,
@@ -237,54 +236,60 @@ optimizer=optim.RMSprop(model.parameters(), lr=0.01)
 
 
 
-for iter in range (0,4):
-	avgTrainCost=0
-	random.shuffle(words)
 
-	for i in range (0,vocabSize-batchSize+1,batchSize):
+avgTrainCost=0
+random.shuffle(words)
+for i in range (0,vocabSize-batchSize+1,batchSize):
 	
-		model.zero_grad()
-		#model.hidden = model.init_hidden()
-		batchOfWords=words[i:i+batchSize]
-		images,labelSeqs,labelSeqlens =GetBatch(batchOfWords)
-		images=autograd.Variable(images)
-		images=images.contiguous()
-		labelSeqs=autograd.Variable(labelSeqs)
-		labelSeqlens=autograd.Variable(labelSeqlens)
-		outputs=model(images)
-		outputs=outputs.contiguous()
-		outputsSize=autograd.Variable(torch.IntTensor([outputs.size(0)] * batchSize))
-		trainCost = criterion(outputs, labelSeqs, outputsSize, labelSeqlens) / batchSize
+	model.zero_grad()
+	#model.hidden = model.init_hidden()
+	"""
+	batchOfWords=words[i:i+batchSize]
+	images,labelSeqs,labelSeqlens =GetBatch(batchOfWords)
+	images=autograd.Variable(images)
+	images=images.contiguous()
+	labelSeqs=autograd.Variable(labelSeqs)
+	labelSeqlens=autograd.Variable(labelSeqlens)
+	outputs=model(images)
+	outputs=outputs.contiguous()
+	outputsSize=autograd.Variable(torch.IntTensor([outputs.size(0)] * batchSize))
+	trainCost = criterion(outputs, labelSeqs, outputsSize, labelSeqlens) / batchSize
+	"""
+	valOutputsTrain=model(valImages)
+	valOutputsTrain=valOutputsTrain.contiguous()
+	valOutputsSizeTrain=autograd.Variable(torch.IntTensor([valOutputsTrain.size(0)] * len(valWords)))
+	trainCost=criterion(valOutputsTrain, valLabelSeqs, valOutputsSizeTrain, valLabelSeqlens) / len(valWords)
 
-		avgTrainCost+=trainCost
-		if i%5000==0:
-			avgTrainCost=avgTrainCost/(5000/batchSize)
-			print ('avgTraincost for last 5000 samples is',avgTrainCost)
-			avgTrainCost=0
-			valOutputs=model(valImages)
-			#print (valOutputs.size()) 100 X nvalsamoles x 37
-			valOutputs=valOutputs.contiguous()
-			valOutputsSize=autograd.Variable(torch.IntTensor([valOutputs.size(0)] * len(valWords)))
-			valCost=criterion(valOutputs, valLabelSeqs, valOutputsSize, valLabelSeqlens) / len(valWords)
-			print ('validaton Cost is',valCost)
+	avgTrainCost+=trainCost
+	if i%50==0:
+		avgTrainCost=avgTrainCost/(i/batchSize)
+		#print ('avgTraincost for last 5000 samples is',avgTrainCost)
+		avgTrainCost=0
+		print ('train Cost is',trainCost)
+		valOutputs=model(valImages)
+		#print (valOutputs.size()) 100 X nvalsamoles x 37
+		valOutputs=valOutputs.contiguous()
+		valOutputsSize=autograd.Variable(torch.IntTensor([valOutputs.size(0)] * len(valWords)))
+		valCost=criterion(valOutputs, valLabelSeqs, valOutputsSize, valLabelSeqlens) / len(valWords)
+		print ('validaton Cost is',valCost)
 
 
-			### get the actual predictions and compute word error ################
-			valOutputs_batchFirst=valOutputs.transpose(0,1)
-			# second output of max() is the argmax along the requuired dimension
-			_, argMaxActivations= valOutputs_batchFirst.max(2)
-			#the below tensor each raw is the sequences of labels predicted for each sample in the batch
-			predictedSeqLabels=argMaxActivations.squeeze(2) #batchSize * seqLen 
-			predictedStrings=Labels2Str(predictedSeqLabels)
-			print (predictedStrings[0])
-			#	print (predictedSeqLabels[0,:].transpose(0,0))
-			#print(valOutputs_batchFirst[0,0,:])
-			#print (argMaxActivations[0,:])
+		### get the actual predictions and compute word error ################
+		valOutputs_batchFirst=valOutputs.transpose(0,1)
+		# second output of max() is the argmax along the requuired dimension
+		_, argMaxActivations= valOutputs_batchFirst.max(2)
+		#the below tensor each raw is the sequences of labels predicted for each sample in the batch
+		predictedSeqLabels=argMaxActivations.squeeze(2) #batchSize * seqLen 
+		predictedStrings=Labels2Str(predictedSeqLabels)
+		print (predictedStrings[0])
+		#print (predictedSeqLabels[0,:].transpose(0,0))
+		print(valOutputs_batchFirst[0,0,:])
+		#print (argMaxActivations[0,:])
 
 		
-		optimizer.zero_grad()
-		trainCost.backward()
-		optimizer.step()
+	optimizer.zero_grad()
+	trainCost.backward()
+	optimizer.step()
 	
 
 
