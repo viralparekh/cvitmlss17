@@ -61,16 +61,17 @@ print('Vectorization...')
 #third axis is the dimensionality of your vector representation, which is = size of the vocabulary = len(chars)
 
 X = np.zeros((len(sentences), maxlen, len(chars)), dtype=np.float)
-#y = np.zeros((len(sentences),maxlen, len(chars)), dtype=np.float) # y is also a sequence , or  a seq of 1 hot vectors
-y= np.zeros((len(sentences),maxlen, 1), dtype=np.uint8)
+
+y = np.zeros((len(sentences),maxlen, len(chars)), dtype=np.float) # y is also a sequence , or  a seq of 1 hot vectors
+#y= np.zeros((len(sentences),maxlen, 1), dtype=np.uint8)
 for i, sentence in enumerate(sentences):
 	for t, char in enumerate(sentence):
 		X[i, t, char_indices[char]] = 1.0 
 
 for i, sentence in enumerate(next_chars):
 	for t, char in enumerate(sentence):
-		#y[i, t, char_indices[char]] = 1.0 
-		y[i, t,0] = char_indices[char]
+		y[i, t, char_indices[char]] = 1.0 
+		#y[i, t,0] = char_indices[char]
 
 print ('vectorization complete')
 
@@ -121,14 +122,14 @@ class RNNnet (nn.Module):
 		lstmOut = lstmOut.view(B*T,D )
 		#print (lstmOut.size())
 		outputLayerActivations=self.outputLayer(lstmOut)
-		#outputSoftmax=self.softmax(outputLayerActivations)
-		outputLayerActivations=outputLayerActivations.view(B,T,-1)
-		#if use_cuda:
-		#	outputSoftmax=outputSoftmax.cuda()
-		#return outputSoftmax
+		outputSoftmax=self.softmax(outputLayerActivations)
+		outputSoftmax=outputSoftmax.view(B,T,-1)
 		if use_cuda:
-			outputLayerActivations=outputLayerActivations.cuda()
-		return outputLayerActivations
+			outputSoftmax=outputSoftmax.cuda()
+		return outputSoftmax
+		#if use_cuda:
+		#	outputLayerActivations=outputLayerActivations.cuda()
+		#return outputLayerActivations
 
 ####################################################################
 # TRAINING
@@ -141,7 +142,7 @@ lstmSize=200
 numLstmLayers=1 #how many rnn/lstm layers of above size need to be stacked
 numDirections=1 # unidirectional =1 , biDirectional=2
 
-lossFunction = nn.CrossEntropyLoss()
+lossFunction = nn.MSELoss()
 model = RNNnet( featDim, lstmSize, featDim, numLstmLayers, numDirections,batchSize)
 if use_cuda:
 	model=model.cuda()
@@ -192,9 +193,9 @@ for epoch in range(4):
 					#print ('outputs and targets are')
 					#print (finalScores[i,j,:])
 					#print(currentBatchTarget[i,j,:])
-					totalLoss = lossFunction(finalScores[i,j,:].unsqueeze(0),currentBatchTarget[i,j,:].long())
+					totalLoss = lossFunction(finalScores[i,j,:],currentBatchTarget[i,j,:])
 				else:
-					totalLoss += lossFunction(finalScores[i,j,:].unsqueeze(0),currentBatchTarget[i,j,:].long())
+					totalLoss += lossFunction(finalScores[i,j,:],currentBatchTarget[i,j,:])
 
 		
 			

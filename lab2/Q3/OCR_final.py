@@ -19,11 +19,9 @@ import torch.autograd as autograd
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-#import torchvision.transforms as transforms
 from warpctc_pytorch import CTCLoss
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
-import cv2
 random.seed(0)
 
 #all word images are resized to a height of 32 pixels
@@ -40,15 +38,15 @@ https://discuss.pytorch.org/t/simple-working-example-how-to-use-packing-for-vari
 
 """
 #imWidth=100
-imWidth=10
+imWidth=15
 fontsList=glob.glob('/OCRData/minesh.mathew/Englishfonts/English_fonts/googleFonts/'+'*.ttf')
 vocabFile=codecs.open('/OCRData2/minesh.mathew/oxford_dataset/sct/mnt/ramdisk/max/90kDICT32px/lexicon.txt','r')
 words = vocabFile.read().split()
 vocabSize=len(words)
 fontSizeOptions={'16','20','24','28','30','32','36','38'}
-batchSize=5
+batchSize=10
 alphabet='0123456789abcdefghijklmnopqrstuvwxyz-'
-#alphabet="abc-"
+#alphabet="(3)-"
 dict={}
 for i, char in enumerate(alphabet):
 	dict[char] = i + 1
@@ -90,20 +88,9 @@ def image2tensor(im):
     (width, height) = im.size
     greyscale_map = list(im.getdata())
     greyscale_map = np.array(greyscale_map, dtype = np.uint8)
-    #greyscale_map=greyscale_map.astype(float)
-    greyscale_map_bin, th =cv2.threshold(greyscale_map,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-    greyscale_map_bin=greyscale_map.astype(float)
-    #print (greyscale_map_bin)
-    greyscale_map = torch.from_numpy(greyscale_map_bin.reshape((height, width))).float()/255.0
+    greyscale_map=greyscale_map.astype(float)
+    greyscale_map = torch.from_numpy(greyscale_map.reshape((height, width))).float()/255.0
     return greyscale_map
-
-
-
-
-
-
-
-
 
 
 def GetBatch ( batchOfWords ):
@@ -120,11 +107,12 @@ def GetBatch ( batchOfWords ):
 
 	for  i,text in enumerate (batchOfWords):
 		wordText=text
+		#print('text is', text)
 		fontName=fontsList[0]
 		fontSize='26'
 		#fontSize=fontSizeOptions[0]
-		#fontName=random.sample(fontsList,1)[0]
-		#fontSize=random.sample(fontSizeOptions,1)[0]
+		fontName=random.sample(fontsList,1)[0]
+		fontSize=random.sample(fontSizeOptions,1)[0]
 		imageFont = ImageFont.truetype(fontName,int(fontSize))
 		textSize=imageFont.getsize(wordText)
 		img=Image.new("L", textSize,(255))
@@ -134,17 +122,8 @@ def GetBatch ( batchOfWords ):
 		#img.save(text+'.jpeg')
 
 		imgTensor=image2tensor(img)
-		#imgplot=plt.imshow(imgTensor.numpy())
-		#plt.savefig(text+'_saveplot.jpeg')
 		imgTensor=imgTensor.unsqueeze(0) # at 0 a new dimenion is added
-		#imgFromTensor=Image.fromarray(imgTensor.numpy())
 
-		#imgFromTensor.save(text+'_fromTensor.jpeg')
-		#if i==0:
-		#	print (imgTensor)
-		#print (imgTensor.size())
-		#print (imgArray.shape)
-		#imgplot=plt.imshow(imgTensor.numpy())
 		wordImages.append(imgTensor)
 
 		labelSeq,l=Str2Labels(wordText)
@@ -154,8 +133,6 @@ def GetBatch ( batchOfWords ):
 	batchImageTensor=torch.transpose(batchImageTensor,1,2)
 	labelSequencesTensor=torch.IntTensor(labelSequences)
 	labelSeqLengthsTensor=torch.IntTensor(labelSeqLengths)
-	#print(batchImageTensor.size())
-	#print (labelSequencesTensor)
 	return batchImageTensor, labelSequencesTensor, labelSeqLengthsTensor
 		
 
@@ -176,11 +153,9 @@ class rnnocr (nn.Module):
 		self.numLayers=numLayers
 		self.numDirections=numDirections
 
-		self.blstm1=nn.LSTM(inputDim, hiddenDim, bidirectional=True, batch_first=True) # first blstm layer takes the image features as inputs
-		self.blstm2=nn.LSTM(hiddenDim, hiddenDim, bidirectional=True, batch_first=True) # here input is output of linear layer 1 
+		self.blstm1=nn.LSTM(inputDim, hiddenDim,1, bidirectional=False, batch_first=True) # first blstm layer takes the image features as inputs
 		
-		self.linearLayer1=nn.Linear(hiddenDim*2, hiddenDim) # the embedding layer between the two blstm layers
-		self.linearLayer2=nn.Linear(hiddenDim*2, outputDim) # linear layer at the output
+		self.linearLayer2=nn.Linear(hiddenDim, outputDim) # linear layer at the output
 		self.softmax = nn.Softmax()
 		
 	def forward(self, x ):
@@ -188,17 +163,11 @@ class rnnocr (nn.Module):
 		lstmOut1, _  =self.blstm1(x ) #x has three dimensions batchSize* seqLen * FeatDim
 		B,T,D  = lstmOut1.size(0), lstmOut1.size(1), lstmOut1.size(2)
 		lstmOut1=lstmOut1.contiguous()
-		embedding=self.linearLayer1(lstmOut1.view(B*T,D))
 
-		input2blstm2=embedding.view(B,T,-1)
 		
 
-		lstmOut2, _ = self.blstm2(input2blstm2)
-		B,T,D  = lstmOut2.size(0), lstmOut2.size(1), lstmOut2.size(2)
-		lstmOut2=lstmOut2.contiguous()
-		outputLayerActivations=self.linearLayer2(lstmOut2.view(B*T,D))
+		outputLayerActivations=self.linearLayer2(lstmOut1.view(B*T,D))
 		outputSoftMax=self.softmax(outputLayerActivations)
-		#return outputSoftMax.view(B,T,-1).transpose(0,1) # transpose since ctc expects the probabilites to be in t x b x nclasses format
 		return outputLayerActivations.view(B,T,-1).transpose(0,1)
 
 
@@ -207,10 +176,7 @@ class rnnocr (nn.Module):
 # Prepare the synthetic validation data
 ##############
 
-#valWords=['((1))','(1)','()','((1))','()','((()))', '((()))', '(1)','()','()','(1)','1','11','(11)','111','(11)','(11)','1','1','()']
-valWords=['bca','aaa','bca','aaa','bca']
-#valWords=['2vit','2vit','2vit','2vit','2vit','2vit','2vit','2vit','2vit','2vit']
-#valWords=['0202','0202','0202','0202','0202','0202','0202','0202','0202','0202']
+valWords=['intermittently','hyderabad','golconda','charminar','gachibowli']
 valImages, valLabelSeqs, valLabelSeqlens=GetBatch(valWords)
 valImages=autograd.Variable(valImages)
 valImages=valImages.contiguous()
@@ -229,7 +195,7 @@ a batch of words are sequentially fetched from the vocabulary
 one epoch runs until all the words in the vocabulary are seen once
 then the word list is shuffled and above process is repeated
 """
-nHidden=50
+nHidden=100
 nClasses= len(alphabet)
 criterion = CTCLoss()
 
@@ -237,22 +203,18 @@ numLayers=1 # the 2 BLSTM layers defined seprately without using numLayers optio
 numDirections=2 # 2 since we need to use a bidirectional LSTM
 model = rnnocr(imHeight,nHidden,nClasses,numLayers,numDirections)
 
-#nClasses= len(alphabet)
-#optimizer = optim.Adam(model.parameters(), lr=0.01,
-#                           betas=(0.5, 0.999))
-optimizer=optim.RMSprop(model.parameters(), lr=0.01)
+optimizer=optim.Adam(model.parameters(), lr=0.001)
 
 
 
-for iter in range (0,4):
+for iter in range (0,200):
 	avgTrainCost=0
 	random.shuffle(words)
 
 	for i in range (0,vocabSize-batchSize+1,batchSize):
 	
 		model.zero_grad()
-		#model.hidden = model.init_hidden()
-		"""
+		
 		batchOfWords=words[i:i+batchSize]
 		images,labelSeqs,labelSeqlens =GetBatch(batchOfWords)
 		images=autograd.Variable(images)
@@ -263,15 +225,9 @@ for iter in range (0,4):
 		outputs=outputs.contiguous()
 		outputsSize=autograd.Variable(torch.IntTensor([outputs.size(0)] * batchSize))
 		trainCost = criterion(outputs, labelSeqs, outputsSize, labelSeqlens) / batchSize
-		"""
-		valOutputs=model(valImages)
-		valOutputs=valOutputs.contiguous()
-		valOutputsSize=autograd.Variable(torch.IntTensor([valOutputs.size(0)] * len(valWords)))
-		trainCost=criterion(valOutputs, valLabelSeqs, valOutputsSize, valLabelSeqlens) / len(valWords)
-
 
 		avgTrainCost+=trainCost
-		if i%5000==0:
+		if i%50==0:
 			avgTrainCost=avgTrainCost/(5000/batchSize)
 			#print ('avgTraincost for last 5000 samples is',avgTrainCost)
 			avgTrainCost=0
@@ -287,14 +243,13 @@ for iter in range (0,4):
 			valOutputs_batchFirst=valOutputs.transpose(0,1)
 			# second output of max() is the argmax along the requuired dimension
 			_, argMaxActivations= valOutputs_batchFirst.max(2)
-			#print (argMaxActivations.size())
 			#the below tensor each raw is the sequences of labels predicted for each sample in the batch
 			predictedSeqLabels=argMaxActivations.squeeze(2) #batchSize * seqLen 
 			predictedStrings=Labels2Str(predictedSeqLabels)
-			
 			for ii in range(0,5):
 
 				print (predictedStrings[ii])
+		
 			#	print (predictedSeqLabels[0,:].transpose(0,0))
 			#print(valOutputs_batchFirst[0,0,:])
 			#print (argMaxActivations[0,:])
