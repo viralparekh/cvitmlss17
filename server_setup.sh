@@ -11,8 +11,8 @@ startport=8007
 interval=10
 numgpus=4
 
-DATAPATH="/users/summerschool/cvdata"
-CODEPATH="/users/summerschool/cvitcvss17"
+DATAPATH="/users/summerschool/mldata"
+CODEPATH="/users/summerschool/cvitmlss17"
 WORKPATH="/tmp/summerschool"
 
 
