@@ -103,7 +103,7 @@ class RNNnet (nn.Module):
 		self.batchSize=batchSize
 		self.lstm=nn.LSTM(inputDim, hiddenDim,2, batch_first=True)
 		self.outputLayer=nn.Linear(hiddenDim, outputDim)
-		self.softmax = nn.Softmax()
+		self.softmax = nn.LogSoftmax()
 		
 	#	self.hidden=self.init_hidden()	
 	#def init_hidden(self):
@@ -116,19 +116,24 @@ class RNNnet (nn.Module):
 		#B,T,D  = x.size(0), x.size(1), x.size(2)
 		lstmOut,_ =self.lstm(x ) #x has three dimensions batchSize* seqLen * FeatDim
 		B,T,D  = lstmOut.size(0), lstmOut.size(1), lstmOut.size(2)
-		lstmOut = lstmOut.contiguous()
+		#lstmOut = lstmOut.contiguous()
 		#print (lstmOut.size())
+		#lstmOut = lstmOut.view(B*T,D )
+		lstmOut=lstmOut.contiguous()
 		lstmOut = lstmOut.view(B*T,D )
 		#print (lstmOut.size())
 		outputLayerActivations=self.outputLayer(lstmOut)
 		#outputSoftmax=self.softmax(outputLayerActivations)
-		outputLayerActivations=outputLayerActivations.view(B,T,-1)
-		#if use_cuda:
-		#	outputSoftmax=outputSoftmax.cuda()
-		#return outputSoftmax
+		#outputSoftmax=outputSoftmax.view(B,T,-1)
+		#outputLayerActivations=outputLayerActivations.view(B,T,-1)
+		outputSoftmax=self.softmax(outputLayerActivations)
+		#outputSoftmax=outputSoftmax.view(B,T,-1)
 		if use_cuda:
-			outputLayerActivations=outputLayerActivations.cuda()
-		return outputLayerActivations
+			outputSoftmax=outputSoftmax.cuda()
+		return outputSoftmax
+		#if use_cuda:
+		#	outputLayerActivations=outputLayerActivations.cuda()
+		#return outputLayerActivations
 
 ####################################################################
 # TRAINING
@@ -137,11 +142,11 @@ class RNNnet (nn.Module):
 
 
 
-lstmSize=200
+lstmSize=50
 numLstmLayers=1 #how many rnn/lstm layers of above size need to be stacked
 numDirections=1 # unidirectional =1 , biDirectional=2
 
-lossFunction = nn.CrossEntropyLoss()
+lossFunction = nn.NLLLoss()
 model = RNNnet( featDim, lstmSize, featDim, numLstmLayers, numDirections,batchSize)
 if use_cuda:
 	model=model.cuda()
@@ -164,45 +169,23 @@ for epoch in range(4):
 		#print(currentBatchInput.size())
 		if use_cuda:
 			currentBatchInput=currentBatchInput.cuda()
-		currentBatchInput = currentBatchInput.contiguous()
+		#currentBatchInput = currentBatchInput.contiguous()
 		#print(currentBatchInput.size())
-		currentBatchTarget=autograd.Variable(torch.from_numpy(y[i:i+batchSize, :, :]).float())
+		currentBatchTarget=autograd.Variable(torch.from_numpy(y[i:i+batchSize, :, :]).long())
+		currentBatchTarget=currentBatchTarget.view(batchSize*maxlen, -1)
 		if use_cuda:
 			currentBatchTarget=currentBatchTarget.cuda()
 
 		finalScores = model(currentBatchInput)
-		finalScores=finalScores.view(batchSize,maxlen,featDim)
-		#_, argMaxAtAllTimesteps=finalScores.max(2)
-		#print('argmax is', argMaxAtAllTimesteps[0,10,:])
-
-		#lossfunctions we have in torch computes loss between two vectors ( cant handle sequences of such vectors)
-		#in our case we need to find the loss at each timestep then add up losses at each timestep to get the total loss for the sequence
-
-		#numInstances=batchSize*maxlen # number of instances is a multiple of seqlen*batchsize, because you have those many instances where you need to compute loss
-		totalLossList=[]
-		totalLoss = None
-		for i in range (0, batchSize):
-			for j in range (0, maxlen):
-				if totalLoss is None:
-					#print ('ops and targets')
-					#print (finalScores[i,j,:].transpose(2))
-					#print (currentBatchTarget[i,j,:])
-					#print('size of activation vector is', finalScores[i,j,:].size())
-					#totalLoss = lossFunction(finalScores[i,j,:],currentBatchTarget[i,j,:])
-					#print ('outputs and targets are')
-					#print (finalScores[i,j,:])
-					#print(currentBatchTarget[i,j,:])
-					totalLoss = lossFunction(finalScores[i,j,:].unsqueeze(0),currentBatchTarget[i,j,:].long())
-				else:
-					totalLoss += lossFunction(finalScores[i,j,:].unsqueeze(0),currentBatchTarget[i,j,:].long())
-
+		print('sizes are')
+		print(finalScores.size())
+		print(currentBatchTarget.size())
+		loss=lossFunction(finalScores, currentBatchTarget.squeeze(1))		
 		
-			
-		totalLoss=totalLoss/(maxlen*batchSize)
-		print ('loss is',totalLoss)
+		print ('loss is',loss)
 		#print (totalLoss)
 		
-		if step%100==0:
+		if step%2==0:
 			
 			seed_string="you ar"
 			
@@ -239,7 +222,7 @@ for epoch in range(4):
 		
 
 		optimizer.zero_grad()
-		totalLoss.backward()
+		loss.backward()
 		optimizer.step()
 		
 		
