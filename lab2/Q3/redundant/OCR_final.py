@@ -38,7 +38,7 @@ https://discuss.pytorch.org/t/simple-working-example-how-to-use-packing-for-vari
 
 """
 #imWidth=100
-imWidth=15
+imWidth=100
 fontsList=glob.glob('/OCRData/minesh.mathew/Englishfonts/English_fonts/googleFonts/'+'*.ttf')
 vocabFile=codecs.open('/OCRData2/minesh.mathew/oxford_dataset/sct/mnt/ramdisk/max/90kDICT32px/lexicon.txt','r')
 words = vocabFile.read().split()
