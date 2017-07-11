@@ -7,7 +7,7 @@ fi
 
 day=$1
 numusers=$2
-startport=8001
+startport=8004
 interval=10
 numgpus=4
 
